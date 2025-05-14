@@ -17,6 +17,7 @@
             <button
                 class="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-full bg-gray-100 hover:bg-blue-100 text-gray-400 hover:text-blue-500 transition"
                 title="帮助"
+                @click="introduce"
             >
               <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                 <circle cx="12" cy="12" r="10"/>
@@ -45,8 +46,8 @@
                 <button
                     class="inline-flex items-center px-3 py-2 text-sm font-medium text-white rounded-md gradient-button"
                     @click="generator"
+                    v-loading="startMode"
                 >
-                  <!-- Send Icon -->
                   <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
                        class="mr-2">
@@ -65,7 +66,18 @@
   <br/>
   <el-row>
     <el-col :span="6">
-      <div class="w-full max-w-md mx-auto bg-white rounded-xl shadow p-6">
+      <div class="w-full max-w-md mx-auto bg-white rounded-xl shadow p-6 relative">
+        <button
+            class="absolute top-4 right-4 w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 hover:bg-blue-100 text-gray-400 hover:text-blue-500 transition"
+            title="帮助"
+            @click="introduceTaskList"
+        >
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <circle cx="12" cy="12" r="10"/>
+            <path d="M9.09 9a3 3 0 1 1 5.83 1c0 2-3 3-3 3"/>
+            <circle cx="12" cy="17" r="1"/>
+          </svg>
+        </button>
         <h2 class="text-lg font-bold mb-4">任务列表</h2>
         <ul id="task-list" class="space-y-3">
           <li class="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-2" v-for="item in tasks">
@@ -75,7 +87,6 @@
               <span class="text-xs text-gray-400 ml-2">{{ getStatusText(item) }}</span>
             </div>
           </li>
-
         </ul>
       </div>
     </el-col>
@@ -86,11 +97,11 @@
   </el-row>
   <br/>
   <div style="text-align: right">
-    <el-button type="primary" size="large" @click="preview">预览</el-button>
+    <el-button type="primary" size="large" @click="preview" :disabled="sessionID === ''">预览</el-button>
   </div>
 </template>
 <script>
-import {ElMessage} from "element-plus";
+import {ElMessage, ElMessageBox} from "element-plus";
 
 let editor, m = "";
 import loader from "@monaco-editor/loader";
@@ -133,6 +144,7 @@ export default {
     },
     async generator() {
       if (this.startMode) {
+        ElMessage.info("正在生成中，请勿重复启动！")
         return
       }
       ElMessage.success("开始生成！请耐心等待任务列表出现或者报错提示！")
@@ -167,6 +179,9 @@ export default {
           taskJSON.data.forEach(data => {
             that.addTask(data.name)
           })
+          if (m === "") {
+            return
+          }
           await loader.init()
               .then(monaco => {
                 m = monaco
@@ -189,6 +204,7 @@ export default {
         }
         if (messageJSON.type === "end") {
           eventSource.close();
+          that.startMode = false
           ElMessage.success("生成完毕！")
         }
       }
@@ -209,6 +225,18 @@ export default {
             const model = m.editor.createModel(res.data, "html")
             editor.setModel(model)
           })
+    },
+    introduce() {
+      ElMessageBox.alert("这是一个让你的想法<strong>快速成型</strong>的应用，得益于llm的发展，我们甚至可以让ui出现在开发之前<br>你可以用来验证idea可行性，甚至直接将源码用于开发中", "UI-Generator", {
+        confirmButtonText: '好的！',
+        dangerouslyUseHTMLString: true
+      })
+    },
+    introduceTaskList() {
+      ElMessageBox.alert("<strong>生成过程中</strong>，任务列表为您实时展示生成状态<br><strong>生成结束后</strong>，你可以通过点击任务列表中的文件名将右侧的编辑器切换到对应的文件<br><strong>编辑器编辑完文件后</strong>，点击下方的保存可以保存该文件", "任务列表如何用", {
+        confirmButtonText: '好的！',
+        dangerouslyUseHTMLString: true
+      })
     }
   }
 }
