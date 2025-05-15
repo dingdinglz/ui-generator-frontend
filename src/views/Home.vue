@@ -1,4 +1,29 @@
 <template>
+  <!-- 历史记录对话框 -->
+  <el-dialog v-model="historyVisible" title="历史记录">
+    <ul class="space-y-3">
+      <li v-for="item in historyList"
+          class="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-2">
+        <span class="text-gray-800">{{ strUnder20(item.idea) }}</span>
+        <button
+            class="px-3 py-1 text-sm bg-blue-500 text-white rounded hover:bg-blue-600 transition"
+            @click="loadHistory(item)"
+        >
+          跳转
+        </button>
+      </li>
+    </ul>
+    <template #footer>
+      <el-popconfirm placement="top" title="是否清空历史记录" confirm-button-text="是" cancel-button-text="否"
+                     @confirm="clearHistory">
+        <template #reference>
+          <el-button type="danger">清空</el-button>
+        </template>
+      </el-popconfirm>
+      <el-button type="primary" @click="historyVisible = false">关闭</el-button>
+    </template>
+  </el-dialog>
+
   <div style="margin: 10px">
     <div class="flex flex-col">
       <div class="w-full max-w-8xl mx-auto">
@@ -83,7 +108,7 @@
           <li class="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-2" v-for="item in tasks">
             <div class="flex items-center gap-2">
               <span :class="'inline-block w-4 h-4 rounded-full ' + getStatusColor(item)"></span>
-              <span class="text-gray-800" @click="selectFile(item.name)">{{ item.name }}</span>
+              <a class="text-gray-800" href="javascript:void(0)" @click="selectFile(item.name)">{{ item.name }}</a>
               <span class="text-xs text-gray-400 ml-2">{{ getStatusText(item) }}</span>
             </div>
           </li>
@@ -97,6 +122,9 @@
   </el-row>
   <br/>
   <div style="text-align: right">
+    <el-button type="primary" size="large" @click="showHistory">查看历史记录</el-button>
+    <el-button type="primary" size="large" :disabled="sessionID === '' || startMode" @click="saveFile">保存文件
+    </el-button>
     <el-button type="primary" size="large" @click="preview" :disabled="sessionID === ''">预览</el-button>
   </div>
 </template>
@@ -106,6 +134,7 @@ import {ElMessage, ElMessageBox} from "element-plus";
 let editor, m = "";
 import loader from "@monaco-editor/loader";
 import axios from "axios";
+import request from "../utils/request.js";
 
 export default {
   data() {
@@ -115,6 +144,9 @@ export default {
       ideaText: "",
       startMode: false,
       sessionID: "",
+      lastFile: "",
+      historyVisible: false,
+      historyList: [],
     }
   },
   methods: {
@@ -180,18 +212,17 @@ export default {
             that.addTask(data.name)
           })
           if (m === "") {
-            return
-          }
-          await loader.init()
-              .then(monaco => {
-                m = monaco
-                editor = monaco.editor.create(document.getElementById("editor"), {
-                  value: "",
-                  language: "html",
-                  fontSize: 25,
-                  theme: "vs-dark",
+            await loader.init()
+                .then(monaco => {
+                  m = monaco
+                  editor = monaco.editor.create(document.getElementById("editor"), {
+                    value: "",
+                    language: "html",
+                    fontSize: 25,
+                    theme: "vs-dark",
+                  })
                 })
-              })
+          }
           return
         }
         if (messageJSON.type === "task_start" || messageJSON.type === "task_end") {
@@ -205,6 +236,16 @@ export default {
         if (messageJSON.type === "end") {
           eventSource.close();
           that.startMode = false
+          let historyText = localStorage.getItem("history")
+          let history = []
+          if (historyText !== null) {
+            history = JSON.parse(historyText)
+          }
+          history.push({
+            id: that.sessionID,
+            idea: that.ideaText,
+          })
+          localStorage.setItem("history", JSON.stringify(history))
           ElMessage.success("生成完毕！")
         }
       }
@@ -217,6 +258,7 @@ export default {
       window.open("/" + this.sessionID + "/")
     },
     selectFile(name) {
+      this.lastFile = name
       axios.get("/api/file?id=" + encodeURIComponent(this.sessionID) + "&name=" + encodeURIComponent(name))
           .then(res => {
             if (m === "") {
@@ -226,6 +268,19 @@ export default {
             editor.setModel(model)
           })
     },
+    saveFile() {
+      request.post("/api/save", {
+        id: this.sessionID,
+        file: this.lastFile,
+        content: editor.getModel().getValue(),
+      })
+          .then(res => {
+            ElMessage.success("保存成功!")
+          })
+          .catch(err => {
+            ElMessage.error(err.message)
+          })
+    },
     introduce() {
       ElMessageBox.alert("这是一个让你的想法<strong>快速成型</strong>的应用，得益于llm的发展，我们甚至可以让ui出现在开发之前<br>你可以用来验证idea可行性，甚至直接将源码用于开发中", "UI-Generator", {
         confirmButtonText: '好的！',
@@ -233,10 +288,51 @@ export default {
       })
     },
     introduceTaskList() {
-      ElMessageBox.alert("<strong>生成过程中</strong>，任务列表为您实时展示生成状态<br><strong>生成结束后</strong>，你可以通过点击任务列表中的文件名将右侧的编辑器切换到对应的文件<br><strong>编辑器编辑完文件后</strong>，点击下方的保存可以保存该文件", "任务列表如何用", {
+      ElMessageBox.alert("<strong>生成过程中</strong>，任务列表为您实时展示生成状态<br><strong>生成结束或者加载历史记录后</strong>，你可以通过点击任务列表中的文件名将右侧的编辑器切换到对应的文件<br><strong>编辑器编辑完文件后</strong>，点击下方的保存可以保存该文件", "任务列表如何用", {
         confirmButtonText: '好的！',
         dangerouslyUseHTMLString: true
       })
+    },
+    showHistory() {
+      if (localStorage.getItem("history") === null) {
+        ElMessage.info("暂无历史记录")
+        return
+      }
+      this.historyList = JSON.parse(localStorage.getItem("history"))
+      this.historyVisible = true
+    },
+    strUnder20(text) {
+      if (text.length > 20) {
+        return text.substring(0, 20) + "..."
+      }
+      return text
+    },
+    loadHistory(item) {
+      const that = this
+      this.ideaText = item.idea
+      this.sessionID = item.id
+      axios.get("/api/load?id=" + encodeURIComponent(item.id))
+          .then(async res => {
+            that.tasks = res.data
+            if (m === "") {
+              await loader.init()
+                  .then(monaco => {
+                    m = monaco
+                    editor = monaco.editor.create(document.getElementById("editor"), {
+                      value: "",
+                      language: "html",
+                      fontSize: 25,
+                      theme: "vs-dark",
+                    })
+                  })
+            }
+            that.historyVisible = false
+          })
+    },
+    clearHistory() {
+      localStorage.removeItem("history")
+      this.historyList = []
+      this.historyVisible = false
     }
   }
 }
