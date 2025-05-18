@@ -111,6 +111,13 @@
               <a class="text-gray-800" href="javascript:void(0)" @click="selectFile(item.name)">{{ item.name }}</a>
               <span class="text-xs text-gray-400 ml-2">{{ getStatusText(item) }}</span>
             </div>
+            <button
+                class="px-3 py-1 text-sm bg-blue-500 text-white rounded hover:bg-blue-600 transition"
+                @click="ChangeFile(item.name)"
+                :disabled="startMode"
+            >
+              修改
+            </button>
           </li>
         </ul>
       </div>
@@ -288,7 +295,7 @@ export default {
       })
     },
     introduceTaskList() {
-      ElMessageBox.alert("<strong>生成过程中</strong>，任务列表为您实时展示生成状态<br><strong>生成结束或者加载历史记录后</strong>，你可以通过点击任务列表中的文件名将右侧的编辑器切换到对应的文件<br><strong>编辑器编辑完文件后</strong>，点击下方的保存可以保存该文件", "任务列表如何用", {
+      ElMessageBox.alert("<strong>生成过程中</strong>，任务列表为您实时展示生成状态<br><strong>生成结束或者加载历史记录后</strong>，你可以通过点击任务列表中的文件名将右侧的编辑器切换到对应的文件<br><strong>编辑器编辑完文件后</strong>，点击下方的保存可以保存该文件<br><strong>生成结束后或者加载历史记录后</strong>，你也可以点击文件右侧的修改，让ai增加功能或者修改功能", "任务列表如何用", {
         confirmButtonText: '好的！',
         dangerouslyUseHTMLString: true
       })
@@ -333,6 +340,42 @@ export default {
       localStorage.removeItem("history")
       this.historyList = []
       this.historyVisible = false
+    },
+    ChangeFile(name) {
+      const that = this
+      ElMessageBox.prompt("请输入修改内容", "AI精修", {confirmButtonText: "确定", cancelButtonText: "取消"})
+          .then(({value}) => {
+            that.startMode = true
+            ElMessage.success("开始进行ai精修")
+            const eventSource = new EventSource("/api/change?id=" + encodeURIComponent(this.sessionID) + "&name=" + encodeURIComponent(name) + "&prompt=" + encodeURIComponent(value))
+            eventSource.onmessage = function (event) {
+              var messageJSON = JSON.parse(event.data)
+              if (messageJSON.type === "error") {
+                ElMessage.error(messageJSON.message)
+                eventSource.close();
+                that.startMode = false
+                return
+              }
+              if (messageJSON.type === "end") {
+                ElMessage.success("生成结束")
+                eventSource.close();
+                that.startMode = false
+                return
+              }
+              if (messageJSON.type === "update") {
+                if (m === "") {
+                  return;
+                }
+                const model = m.editor.createModel(messageJSON.message, "html")
+                editor.setModel(model)
+                editor.revealLine(model.getLineCount())
+                return
+              }
+            }
+          })
+          .catch(() => {
+
+          })
     }
   }
 }
