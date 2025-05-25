@@ -132,6 +132,14 @@
     <el-button type="primary" size="large" @click="showHistory">查看历史记录</el-button>
     <el-button type="primary" size="large" :disabled="sessionID === '' || startMode" @click="saveFile">保存文件
     </el-button>
+    <el-popover title="帮助" content="该按钮的功能是当收到MaxTokens限制时，让AI将该文件生成完整" placement="top">
+      <template #reference>
+        <el-button size="large" type="primary" @click="ContinueGenerate"
+                   :disabled="sessionID === '' || lastFile==='' || startMode">
+          继续生成
+        </el-button>
+      </template>
+    </el-popover>
     <el-button type="primary" size="large" @click="preview" :disabled="sessionID === ''">预览</el-button>
   </div>
 </template>
@@ -359,8 +367,8 @@ export default {
           .then(({value}) => {
             that.startMode = true
             ElMessage.success("开始进行ai精修")
-            const eventSource = new EventSource("/api/change?id=" + encodeURIComponent(this.sessionID) + "&name=" + encodeURIComponent(name) + "&prompt=" + encodeURIComponent(value))
-            eventSource.onmessage = function (event) {
+            const eventSource = new SSE("/api/change?id=" + encodeURIComponent(this.sessionID) + "&name=" + encodeURIComponent(name) + "&prompt=" + encodeURIComponent(value))
+            eventSource.addEventListener("message", (event) => {
               var messageJSON = JSON.parse(event.data)
               if (messageJSON.type === "error") {
                 ElMessage.error(messageJSON.message)
@@ -383,11 +391,44 @@ export default {
                 editor.revealLine(model.getLineCount())
                 return
               }
-            }
+            })
           })
           .catch(() => {
 
           })
+    },
+    ContinueGenerate() {
+      if (this.sessionID === "" || this.lastFile === "") {
+        ElMessage.error("无效内容！")
+        return
+      }
+      this.startMode = true
+      const that = this
+      const eventSource = new SSE("/api/continue?id=" + encodeURIComponent(this.sessionID) + "&file=" + encodeURIComponent(this.lastFile))
+      eventSource.addEventListener("message", (event) => {
+        var messageJSON = JSON.parse(event.data)
+        if (messageJSON.type === "error") {
+          ElMessage.error(messageJSON.message)
+          eventSource.close();
+          that.startMode = false
+          return
+        }
+        if (messageJSON.type === "end") {
+          ElMessage.success("生成结束")
+          eventSource.close();
+          that.startMode = false
+          return
+        }
+        if (messageJSON.type === "update") {
+          if (m === "") {
+            return;
+          }
+          const model = m.editor.createModel(messageJSON.message, "html")
+          editor.setModel(model)
+          editor.revealLine(model.getLineCount())
+          return
+        }
+      })
     }
   }
 }
