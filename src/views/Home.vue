@@ -137,6 +137,7 @@
 </template>
 <script>
 import {ElMessage, ElMessageBox} from "element-plus";
+import {SSE} from './sse.js'
 
 let editor, m = "";
 import loader from "@monaco-editor/loader";
@@ -189,8 +190,18 @@ export default {
       ElMessage.success("开始生成！请耐心等待任务列表出现或者报错提示！")
       const that = this
       this.startMode = true
-      const eventSource = new EventSource("/api/generate?idea=" + encodeURIComponent(this.ideaText) + "&mode=" + this.generateMode)
-      eventSource.onmessage = async function (event) {
+      var eventSource = new SSE("/api/generate", {
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        payload: JSON.stringify({
+          idea: this.ideaText,
+          mode: this.generateMode
+        }),
+        start: false,
+        method: "POST",
+      })
+      eventSource.addEventListener("message", async (event) => {
         var messageJSON = JSON.parse(event.data)
         if (messageJSON.type === "error") {
           ElMessage.error(messageJSON.message)
@@ -255,7 +266,8 @@ export default {
           localStorage.setItem("history", JSON.stringify(history))
           ElMessage.success("生成完毕！")
         }
-      }
+      })
+      eventSource.stream()
     },
     preview() {
       if (this.sessionID === "") {
