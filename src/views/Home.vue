@@ -159,6 +159,9 @@
         </el-button>
       </template>
     </el-popover>
+    <el-button type="primary" size="large" :disabled="sessionID === ''"
+               @click="DownloadSRC">下载源文件
+    </el-button>
     <el-button type="primary" size="large" @click="preview" :disabled="sessionID === ''">预览</el-button>
   </div>
 </template>
@@ -492,8 +495,14 @@ export default {
           return
         }
       })
+    },
+    DownloadSRC() {
+      if (this.sessionID === "") {
+        ElMessage.error("无效ID！")
+        return
+      }
+      window.open('/api/download?id=' + encodeURIComponent(this.sessionID))
     }
-
   }
 }
 </script>
