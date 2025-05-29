@@ -24,6 +24,22 @@
     </template>
   </el-dialog>
 
+  <!-- 添加页面对话框 -->
+  <el-dialog v-model="addModalVisible" title="添加页面">
+    <el-form :model="addPageForm" label-width="auto">
+      <el-form-item label="页面名">
+        <el-input v-model="addPageForm.name" placeholder="例如：test.html"></el-input>
+      </el-form-item>
+      <el-form-item label="简单描述">
+        <el-input v-model="addPageForm.idea" placeholder="例如：用于测试"></el-input>
+      </el-form-item>
+    </el-form>
+    <template #footer>
+      <el-button type="primary" @click="AddGenerate">确定</el-button>
+      <el-button type="primary" @click="addModalVisible = false">关闭</el-button>
+    </template>
+  </el-dialog>
+
   <div style="margin: 10px">
     <div class="flex flex-col">
       <div class="w-full max-w-8xl mx-auto">
@@ -130,6 +146,9 @@
   <br/>
   <div style="text-align: right">
     <el-button type="primary" size="large" @click="showHistory">查看历史记录</el-button>
+    <el-button type="primary" size="large" @click="addModalVisible = true" :disabled="sessionID === '' || startMode">
+      添加页面
+    </el-button>
     <el-button type="primary" size="large" :disabled="sessionID === '' || startMode" @click="saveFile">保存文件
     </el-button>
     <el-popover title="帮助" content="该按钮的功能是当收到MaxTokens限制时，让AI将该文件生成完整" placement="top">
@@ -151,6 +170,7 @@ let editor, m = "";
 import loader from "@monaco-editor/loader";
 import axios from "axios";
 import request from "../utils/request.js";
+import {reactive} from "vue";
 
 export default {
   data() {
@@ -163,6 +183,11 @@ export default {
       lastFile: "",
       historyVisible: false,
       historyList: [],
+      addModalVisible: false,
+      addPageForm: reactive({
+        name: "",
+        idea: ""
+      })
     }
   },
   methods: {
@@ -429,7 +454,46 @@ export default {
           return
         }
       })
+    },
+    AddGenerate() {
+      if (this.sessionID === "" || this.addPageForm.name === "" || this.addPageForm.idea === "") {
+        ElMessage.error("无效内容！")
+        return
+      }
+      ElMessage.success("开始生成！")
+      const taskID = this.addTask(this.addPageForm.name)
+      this.toggleTaskStatus(taskID)
+      this.startMode = true
+      this.addModalVisible = false
+      const that = this
+      const eventSource = new SSE("/api/add?id=" + encodeURIComponent(this.sessionID) + "&file=" + encodeURIComponent(this.addPageForm.name) + "&idea=" + encodeURIComponent(this.addPageForm.idea))
+      eventSource.addEventListener("message", (event) => {
+        var messageJSON = JSON.parse(event.data)
+        if (messageJSON.type === "error") {
+          ElMessage.error(messageJSON.message)
+          eventSource.close();
+          that.startMode = false
+          return
+        }
+        if (messageJSON.type === "end") {
+          ElMessage.success("生成结束")
+          eventSource.close();
+          that.startMode = false
+          that.toggleTaskStatus(taskID)
+          return
+        }
+        if (messageJSON.type === "update") {
+          if (m === "") {
+            return;
+          }
+          const model = m.editor.createModel(messageJSON.message, "html")
+          editor.setModel(model)
+          editor.revealLine(model.getLineCount())
+          return
+        }
+      })
     }
+
   }
 }
 </script>
