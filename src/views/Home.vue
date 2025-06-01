@@ -5,12 +5,20 @@
       <li v-for="item in historyList"
           class="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-2">
         <span class="text-gray-800">{{ strUnder20(item.idea) }}</span>
-        <button
-            class="px-3 py-1 text-sm bg-blue-500 text-white rounded hover:bg-blue-600 transition"
-            @click="loadHistory(item)"
-        >
-          跳转
-        </button>
+        <div class="flex gap-2">
+          <button
+              class="px-3 py-1 text-sm bg-red-500 text-white rounded hover:bg-red-600 transition"
+              @click="deleteHistoryItem(item)"
+          >
+            删除
+          </button>
+          <button
+              class="px-3 py-1 text-sm bg-blue-500 text-white rounded hover:bg-blue-600 transition"
+              @click="loadHistory(item)"
+          >
+            跳转
+          </button>
+        </div>
       </li>
     </ul>
     <template #footer>
@@ -388,6 +396,13 @@ export default {
       localStorage.removeItem("history")
       this.historyList = []
       this.historyVisible = false
+    },
+    deleteHistoryItem(item) {
+      const history = JSON.parse(localStorage.getItem("history") || "[]")
+      const newHistory = history.filter(h => h.id !== item.id)
+      localStorage.setItem("history", JSON.stringify(newHistory))
+      this.historyList = newHistory
+      ElMessage.success("删除成功")
     },
     ChangeFile(name) {
       const that = this
