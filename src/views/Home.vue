@@ -135,13 +135,21 @@
               <a class="text-gray-800" href="javascript:void(0)" @click="selectFile(item.name)">{{ item.name }}</a>
               <span class="text-xs text-gray-400 ml-2">{{ getStatusText(item) }}</span>
             </div>
-            <button
-                class="px-3 py-1 text-sm bg-blue-500 text-white rounded hover:bg-blue-600 transition"
-                @click="ChangeFile(item.name)"
-                :disabled="startMode"
-            >
-              修改
-            </button>
+            <div class="flex items-center gap-2">
+              <button
+                  class="px-3 py-1 text-sm bg-blue-500 text-white rounded hover:bg-blue-600 transition"
+                  @click="ChangeFile(item.name)"
+                  :disabled="startMode"
+              >
+                修改
+              </button>
+              <button
+                  class="px-3 py-1 text-sm bg-red-500 text-white rounded hover:bg-red-600 transition"
+                  @click="DeleteFile(item.name)"
+              >
+                删除
+              </button>
+            </div>
           </li>
         </ul>
       </div>
@@ -517,6 +525,24 @@ export default {
         return
       }
       window.open('/api/download?id=' + encodeURIComponent(this.sessionID))
+    },
+    DeleteFile(file) {
+      if (this.sessionID === "" || file === "") {
+        return
+      }
+      const that = this
+      request.get("/api/delete?id=" + encodeURIComponent(this.sessionID) + "&file=" + encodeURIComponent(file))
+          .then(res => {
+            if (res.data !== "ok") {
+              ElMessage.error(res.data)
+              return
+            }
+            that.tasks = that.tasks.filter(task => task.name !== file)
+            ElMessage.success("删除成功")
+          })
+          .catch(err => {
+            ElMessage.error(err.message)
+          })
     }
   }
 }
